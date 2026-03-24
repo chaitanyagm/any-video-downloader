@@ -1,110 +1,252 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Video Downloader</title>
-<style>
-body { font-family: Arial; padding: 20px; }
-.container { max-width: 600px; margin: auto; }
-.input-group { margin-bottom: 15px; }
-progress { width: 100%; height: 20px; }
-.error { color: red; }
-button { margin-top: 5px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Universal Video Downloader</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; background-color: #0f172a; color: #f8fafc; }
+        .glass { background: rgba(30, 41, 59, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.1); }
+        .progress-fill { transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+        .retry-anim:hover { transform: rotate(180deg); transition: 0.5s; }
+    </style>
 </head>
+<body class="min-h-screen p-4 md:p-8">
 
-<body>
-<div class="container">
-<h2>Video Downloader</h2>
+    <div class="max-w-3xl mx-auto">
+        <!-- Header -->
+        <header class="mb-10 text-center">
+            <h1 class="text-4xl font-extrabold mb-2 bg-gradient-to-r from-blue-400 to-emerald-400 bg-clip-text text-transparent">
+                Video Downloader
+            </h1>
+            <p class="text-slate-400 italic">Download from YouTube, TikTok, Vimeo & more.</p>
+        </header>
 
-<div id="inputs"></div>
+        <!-- Main Input Container -->
+        <div id="download-list" class="space-y-4">
+            <!-- Items will be injected here -->
+        </div>
 
-<button onclick="addInput()">➕ Add Link</button>
+        <!-- Global Actions -->
+        <div class="mt-8 flex justify-center">
+            <button onclick="addInputField()" class="flex items-center gap-2 px-6 py-3 bg-blue-600 hover:bg-blue-500 rounded-full font-semibold transition-all shadow-lg shadow-blue-900/20 active:scale-95">
+                <i data-lucide="plus-circle"></i> Add Video Link
+            </button>
+        </div>
+    </div>
 
-</div>
+    <!-- Template for a single download row -->
+    <template id="download-item-tmpl">
+        <div class="glass p-5 rounded-2xl relative group overflow-hidden border-l-4 border-l-transparent transition-all">
+            <div class="flex flex-col md:flex-row gap-4 items-center">
+                <!-- Input field -->
+                <div class="relative flex-1 w-full">
+                    <input type="text" placeholder="Paste link here..." 
+                        class="url-input w-full bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 outline-none focus:border-blue-500 transition-colors pr-10">
+                    <button class="remove-btn absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-red-400">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>
+                    </button>
+                </div>
 
-<script>
+                <!-- Control Buttons -->
+                <div class="flex gap-2 shrink-0">
+                    <button class="dl-btn p-3 bg-emerald-600 hover:bg-emerald-500 rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="download" class="w-5 h-5"></i>
+                    </button>
+                    <button class="pause-btn hidden p-3 bg-amber-600 hover:bg-amber-500 rounded-xl transition-all">
+                        <i data-lucide="pause" class="w-5 h-5"></i>
+                    </button>
+                    <button class="priority-btn p-3 bg-slate-700 hover:bg-slate-600 rounded-xl transition-all" title="Prioritize">
+                        <i data-lucide="arrow-up-circle" class="w-5 h-5 text-blue-400"></i>
+                    </button>
+                </div>
+            </div>
 
-let downloads = [];
+            <!-- Meta Info & Progress Area -->
+            <div class="status-area hidden mt-4 space-y-2">
+                <div class="flex justify-between items-center text-sm">
+                    <span class="file-name font-medium text-slate-300 truncate max-w-[70%] text-xs md:text-sm">Fetching metadata...</span>
+                    <span class="percentage text-slate-400">0%</span>
+                </div>
+                <!-- Progress Bar -->
+                <div class="w-full bg-slate-800 rounded-full h-2 overflow-hidden">
+                    <div class="progress-bar progress-fill h-full bg-blue-500 w-0"></div>
+                </div>
+                <!-- Error Area -->
+                <div class="error-msg hidden flex items-center gap-2 text-red-400 text-sm mt-1">
+                    <i data-lucide="alert-circle" class="w-4 h-4"></i>
+                    <span class="msg">Failed to download.</span>
+                    <button class="retry-btn ml-auto text-xs bg-red-900/30 px-2 py-1 rounded hover:bg-red-900/50 border border-red-800 flex items-center gap-1">
+                        <i data-lucide="refresh-cw" class="w-3 h-3 retry-anim"></i> Retry
+                    </button>
+                </div>
+            </div>
+        </div>
+    </template>
 
-function addInput() {
-    const id = Date.now();
+    <script>
+        // List of public Cobalt instances to rotate if one fails
+        const COBALT_INSTANCES = [
+            'https://api.cobalt.tools',
+            'https://cobalt.peroxis.me',
+            'https://cobalt.shingle.top'
+        ];
 
-    const div = document.createElement("div");
-    div.className = "input-group";
-    div.id = "group-" + id;
+        let queue = [];
+        let currentDownloads = new Map();
 
-    div.innerHTML = `
-        <input type="text" id="url-${id}" placeholder="Paste video URL" style="width:100%">
-        <button onclick="startDownload(${id})">Download</button>
-        <button onclick="pauseDownload(${id})">Pause</button>
-        <button onclick="resumeDownload(${id})">Resume</button>
-        <progress id="progress-${id}" value="0" max="100"></progress>
-        <div id="status-${id}"></div>
-    `;
-
-    document.getElementById("inputs").appendChild(div);
-}
-
-async function startDownload(id) {
-    const url = document.getElementById(`url-${id}`).value;
-    const progress = document.getElementById(`progress-${id}`);
-    const status = document.getElementById(`status-${id}`);
-
-    try {
-        const response = await fetch(url);
-
-        if (!response.ok) throw new Error("Download failed");
-
-        const reader = response.body.getReader();
-        const contentLength = +response.headers.get('Content-Length');
-
-        let received = 0;
-        let chunks = [];
-
-        downloads[id] = { reader, chunks, received, contentLength };
-
-        while (true) {
-            const { done, value } = await reader.read();
-
-            if (done) break;
-
-            chunks.push(value);
-            received += value.length;
-
-            let percent = (received / contentLength) * 100;
-            progress.value = percent;
+        function init() {
+            addInputField();
+            lucide.createIcons();
         }
 
-        const blob = new Blob(chunks);
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "video.mp4";
-        link.click();
+        function addInputField() {
+            const list = document.getElementById('download-list');
+            const tmpl = document.getElementById('download-item-tmpl');
+            const clone = tmpl.content.cloneNode(true);
+            const container = clone.querySelector('div');
+            
+            const id = Math.random().toString(36).substr(2, 9);
+            container.dataset.id = id;
 
-        status.innerHTML = "✅ Completed";
+            // Event Listeners
+            container.querySelector('.remove-btn').onclick = () => {
+                cancelDownload(id);
+                container.remove();
+            };
+            container.querySelector('.dl-btn').onclick = () => startProcess(id);
+            container.querySelector('.retry-btn').onclick = () => startProcess(id);
+            container.querySelector('.priority-btn').onclick = () => prioritize(id);
 
-    } catch (err) {
-        status.innerHTML = `<span class="error">❌ ${err.message}</span>
-        <button onclick="startDownload(${id})">Retry</button>`;
-    }
-}
+            list.appendChild(clone);
+            lucide.createIcons();
+        }
 
-function pauseDownload(id) {
-    if (downloads[id]?.reader) {
-        downloads[id].reader.cancel();
-        document.getElementById(`status-${id}`).innerHTML = "⏸ Paused";
-    }
-}
+        async function startProcess(id) {
+            const container = document.querySelector(`[data-id="${id}"]`);
+            const urlInput = container.querySelector('.url-input');
+            const statusArea = container.querySelector('.status-area');
+            const fileNameEl = container.querySelector('.file-name');
+            const progressBar = container.querySelector('.progress-bar');
+            const percentageText = container.querySelector('.percentage');
+            const errorArea = container.querySelector('.error-msg');
+            const dlBtn = container.querySelector('.dl-btn');
 
-function resumeDownload(id) {
-    document.getElementById(`status-${id}`).innerHTML = "🔄 Restarting...";
-    startDownload(id);
-}
+            const videoUrl = urlInput.value.trim();
+            if (!videoUrl) return alert("Please paste a link first!");
 
-// Add first input automatically
-addInput();
+            // UI Reset
+            statusArea.classList.remove('hidden');
+            errorArea.classList.add('hidden');
+            progressBar.classList.remove('bg-red-500');
+            progressBar.classList.add('bg-blue-500');
+            progressBar.style.width = '0%';
+            percentageText.innerText = '0%';
+            fileNameEl.innerText = 'Extracting media link...';
+            dlBtn.disabled = true;
 
-</script>
+            try {
+                // 1. Fetch metadata/direct link from Cobalt API
+                let downloadUrl = null;
+                let filename = "video.mp4";
+                let success = false;
+
+                for (let instance of COBALT_INSTANCES) {
+                    try {
+                        const response = await fetch(instance, {
+                            method: 'POST',
+                            headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ url: videoUrl, videoQuality: '720' })
+                        });
+                        const data = await response.json();
+                        
+                        if (data.status === 'redirect' || data.status === 'stream' || data.status === 'tunnel') {
+                            downloadUrl = data.url;
+                            filename = data.filename || `video_${Date.now()}.mp4`;
+                            success = true;
+                            break;
+                        }
+                    } catch (e) { continue; }
+                }
+
+                if (!success) throw new Error("Could not extract video. Link may be private or unsupported.");
+
+                fileNameEl.innerText = filename;
+
+                // 2. Fetch with Progress
+                const controller = new AbortController();
+                currentDownloads.set(id, controller);
+
+                const response = await fetch(downloadUrl, { signal: controller.signal });
+                const reader = response.body.getReader();
+                const contentLength = +response.headers.get('Content-Length');
+
+                let receivedLength = 0;
+                let chunks = [];
+
+                while(true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+
+                    chunks.push(value);
+                    receivedLength += value.length;
+                    
+                    if (contentLength) {
+                        const progress = Math.round((receivedLength / contentLength) * 100);
+                        progressBar.style.width = progress + '%';
+                        percentageText.innerText = progress + '%';
+                    } else {
+                        percentageText.innerText = 'Downloading...';
+                        progressBar.style.width = '100%';
+                    }
+                }
+
+                // 3. Complete & Save
+                const blob = new Blob(chunks);
+                const blobUrl = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = blobUrl;
+                a.download = filename;
+                document.body.appendChild(a);
+                a.click();
+                
+                progressBar.classList.replace('bg-blue-500', 'bg-emerald-500');
+                percentageText.innerText = 'Complete!';
+                
+                // Clean up
+                setTimeout(() => {
+                    URL.revokeObjectURL(blobUrl);
+                    a.remove();
+                }, 100);
+
+            } catch (err) {
+                console.error(err);
+                errorArea.classList.remove('hidden');
+                errorArea.querySelector('.msg').innerText = err.message;
+                progressBar.classList.replace('bg-blue-500', 'bg-red-500');
+                dlBtn.disabled = false;
+            }
+        }
+
+        function cancelDownload(id) {
+            if (currentDownloads.has(id)) {
+                currentDownloads.get(id).abort();
+                currentDownloads.delete(id);
+            }
+        }
+
+        function prioritize(id) {
+            const container = document.querySelector(`[data-id="${id}"]`);
+            const list = document.getElementById('download-list');
+            list.prepend(container); // Move to top visually
+            container.classList.add('ring-2', 'ring-blue-500');
+            setTimeout(() => container.classList.remove('ring-2', 'ring-blue-500'), 2000);
+        }
+
+        window.onload = init;
+    </script>
 </body>
 </html>
