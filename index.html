@@ -1,9 +1,110 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>My Site</title>
+<meta charset="UTF-8">
+<title>Video Downloader</title>
+<style>
+body { font-family: Arial; padding: 20px; }
+.container { max-width: 600px; margin: auto; }
+.input-group { margin-bottom: 15px; }
+progress { width: 100%; height: 20px; }
+.error { color: red; }
+button { margin-top: 5px; }
+</style>
 </head>
+
 <body>
-  <h1>Hello from GitHub Pages 🚀</h1>
+<div class="container">
+<h2>Video Downloader</h2>
+
+<div id="inputs"></div>
+
+<button onclick="addInput()">➕ Add Link</button>
+
+</div>
+
+<script>
+
+let downloads = [];
+
+function addInput() {
+    const id = Date.now();
+
+    const div = document.createElement("div");
+    div.className = "input-group";
+    div.id = "group-" + id;
+
+    div.innerHTML = `
+        <input type="text" id="url-${id}" placeholder="Paste video URL" style="width:100%">
+        <button onclick="startDownload(${id})">Download</button>
+        <button onclick="pauseDownload(${id})">Pause</button>
+        <button onclick="resumeDownload(${id})">Resume</button>
+        <progress id="progress-${id}" value="0" max="100"></progress>
+        <div id="status-${id}"></div>
+    `;
+
+    document.getElementById("inputs").appendChild(div);
+}
+
+async function startDownload(id) {
+    const url = document.getElementById(`url-${id}`).value;
+    const progress = document.getElementById(`progress-${id}`);
+    const status = document.getElementById(`status-${id}`);
+
+    try {
+        const response = await fetch(url);
+
+        if (!response.ok) throw new Error("Download failed");
+
+        const reader = response.body.getReader();
+        const contentLength = +response.headers.get('Content-Length');
+
+        let received = 0;
+        let chunks = [];
+
+        downloads[id] = { reader, chunks, received, contentLength };
+
+        while (true) {
+            const { done, value } = await reader.read();
+
+            if (done) break;
+
+            chunks.push(value);
+            received += value.length;
+
+            let percent = (received / contentLength) * 100;
+            progress.value = percent;
+        }
+
+        const blob = new Blob(chunks);
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "video.mp4";
+        link.click();
+
+        status.innerHTML = "✅ Completed";
+
+    } catch (err) {
+        status.innerHTML = `<span class="error">❌ ${err.message}</span>
+        <button onclick="startDownload(${id})">Retry</button>`;
+    }
+}
+
+function pauseDownload(id) {
+    if (downloads[id]?.reader) {
+        downloads[id].reader.cancel();
+        document.getElementById(`status-${id}`).innerHTML = "⏸ Paused";
+    }
+}
+
+function resumeDownload(id) {
+    document.getElementById(`status-${id}`).innerHTML = "🔄 Restarting...";
+    startDownload(id);
+}
+
+// Add first input automatically
+addInput();
+
+</script>
 </body>
 </html>
