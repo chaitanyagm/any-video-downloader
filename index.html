@@ -9,80 +9,94 @@
 <script src="https://unpkg.com/lucide@latest"></script>
 
 <style>
-body { background:#05070a; color:#e2e8f0; font-family:sans-serif; }
-.glass { background: rgba(15,23,42,0.8); border:1px solid rgba(255,255,255,0.08);}
-.spin { animation: spin 1s linear infinite;}
-@keyframes spin { to { transform: rotate(360deg);} }
+body {
+    background:#05070a;
+    color:#e2e8f0;
+    font-family: 'Segoe UI', sans-serif;
+}
+.glass {
+    background: rgba(15,23,42,0.85);
+    backdrop-filter: blur(10px);
+    border:1px solid rgba(255,255,255,0.08);
+}
 </style>
 </head>
 
-<body class="p-6">
+<body class="min-h-screen p-6">
 
-<h1 class="text-4xl text-center mb-8 font-bold text-indigo-400">VideoFetch</h1>
+<div class="max-w-3xl mx-auto">
 
-<div id="list" class="max-w-2xl mx-auto space-y-4"></div>
+    <!-- Header -->
+    <h1 class="text-5xl font-bold text-center mb-3 text-indigo-400">
+        VideoFetch
+    </h1>
+    <p class="text-center text-slate-400 mb-10 text-sm">
+        Paste links → Instantly download (YouTube, TikTok, Vimeo & more)
+    </p>
 
-<div class="text-center mt-6">
-<button onclick="addRow()" class="bg-indigo-600 px-6 py-3 rounded-xl">+ Add Link</button>
+    <!-- List -->
+    <div id="list" class="space-y-4"></div>
+
+    <!-- Add Button -->
+    <div class="text-center mt-8">
+        <button onclick="addRow()" 
+            class="bg-indigo-600 hover:bg-indigo-500 px-8 py-3 rounded-xl font-bold">
+            + Add Another Link
+        </button>
+    </div>
+
 </div>
 
+<!-- Template -->
 <template id="tpl">
-<div class="glass p-4 rounded-xl">
-<div class="flex gap-2">
-<input class="url flex-1 bg-black p-3 rounded-lg" placeholder="Paste video link">
-<button class="go bg-green-600 px-4 rounded-lg">Download</button>
-<button class="del bg-red-600 px-3 rounded-lg">X</button>
-</div>
+<div class="glass p-5 rounded-2xl">
+    <div class="flex flex-col md:flex-row gap-3">
 
-<div class="status hidden mt-3 text-sm"></div>
+        <input type="text" placeholder="Paste video link here..."
+            class="url flex-1 bg-black/40 border border-slate-800 px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500">
+
+        <button class="go bg-emerald-600 hover:bg-emerald-500 px-5 py-3 rounded-xl font-bold">
+            Download
+        </button>
+
+        <button class="del bg-red-600 hover:bg-red-500 px-4 rounded-xl">
+            ✕
+        </button>
+    </div>
+
+    <div class="status hidden mt-4 text-sm text-indigo-400 font-medium"></div>
 </div>
 </template>
 
 <script>
-const API = "https://api.cobalt.tools/api/json";
+function addRow() {
+    const tpl = document.getElementById("tpl").content.cloneNode(true);
 
-function addRow(){
-  const tpl = document.getElementById("tpl").content.cloneNode(true);
-  const row = tpl.querySelector("div");
-  const input = tpl.querySelector(".url");
-  const btn = tpl.querySelector(".go");
-  const del = tpl.querySelector(".del");
-  const status = tpl.querySelector(".status");
+    const row = tpl.querySelector(".glass");
+    const input = tpl.querySelector(".url");
+    const btn = tpl.querySelector(".go");
+    const del = tpl.querySelector(".del");
+    const status = tpl.querySelector(".status");
 
-  btn.onclick = async () => {
-    const url = input.value.trim();
-    if(!url) return;
+    btn.onclick = () => {
+        const url = input.value.trim();
+        if (!url) return;
 
-    status.classList.remove("hidden");
-    status.innerHTML = "⏳ Processing...";
+        status.classList.remove("hidden");
+        status.innerText = "🚀 Redirecting to downloader...";
 
-    try {
-      const res = await fetch(API,{
-        method:"POST",
-        headers:{ "Content-Type":"application/json"},
-        body: JSON.stringify({ url })
-      });
+        // 🔥 REDIRECT METHOD (NO CORS)
+        window.open(
+            "https://cobalt.tools/?u=" + encodeURIComponent(url),
+            "_blank"
+        );
+    };
 
-      const data = await res.json();
+    del.onclick = () => row.remove();
 
-      if(data.status !== "success" || !data.url){
-        throw new Error("Failed to fetch video");
-      }
-
-      status.innerHTML = "🚀 Opening download...";
-      
-      // BEST WORKING METHOD
-      window.open(data.url, "_blank");
-
-    } catch(e){
-      status.innerHTML = "❌ " + e.message;
-    }
-  };
-
-  del.onclick = () => row.remove();
-
-  document.getElementById("list").appendChild(tpl);
+    document.getElementById("list").appendChild(tpl);
 }
+
 addRow();
 </script>
 
